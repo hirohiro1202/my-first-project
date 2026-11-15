@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My First Project</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <h1 class="logo">My First Project</h1>
+    <nav>
+      <a href="#about">紹介</a>
+      <a href="#features">特徴</a>
+      <a href="#contact">お問い合わせ</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h2>はじめてのWebサイトへようこそ</h2>
+      <p>HTML・CSS・JavaScript で作ったシンプルなページです。</p>
+      <button id="greet-btn" type="button">あいさつする</button>
+      <p id="greeting" class="greeting" aria-live="polite"></p>
+    </section>
+
+    <section id="about" class="section">
+      <h2>紹介</h2>
+      <p>このサイトは、Webサイト作りの最初の一歩として作成しました。自由に書き換えて、自分だけのページに育ててください。</p>
+    </section>
+
+    <section id="features" class="section">
+      <h2>特徴</h2>
+      <div class="cards">
+        <article class="card">
+          <h3>シンプル</h3>
+          <p>余計なものがなく、コードが読みやすい構成です。</p>
+        </article>
+        <article class="card">
+          <h3>レスポンシブ</h3>
+          <p>パソコンでもスマートフォンでも見やすく表示されます。</p>
+        </article>
+        <article class="card">
+          <h3>インタラクティブ</h3>
+          <p>ボタンやカウンターなど、JavaScript の動きを体験できます。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section counter">
+      <h2>カウンター</h2>
+      <p class="count" id="count">0</p>
+      <div class="counter-buttons">
+        <button id="dec" type="button">−1</button>
+        <button id="inc" type="button">+1</button>
+        <button id="reset" type="button" class="secondary">リセット</button>
+      </div>
+    </section>
+
+    <section id="contact" class="section">
+      <h2>お問い合わせ</h2>
+      <form id="contact-form">
+        <label>お名前
+          <input type="text" id="name" required>
+        </label>
+        <label>メッセージ
+          <textarea id="message" rows="4" required></textarea>
+        </label>
+        <button type="submit">送信</button>
+        <p id="form-result" class="greeting" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 My First Project</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
