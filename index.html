@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="HTML・CSS・JavaScriptで作ったシンプルなWebサイト。ダークモード・カウンター・お問い合わせフォームを実装。">
+  <!-- ダークモードのフラッシュ防止: data-theme を CSS 読み込み前に設定する -->
   <script>(function(){var t=localStorage.getItem("theme"),d=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;if(t==="dark"||(t===null&&d))document.documentElement.dataset.theme="dark";})();</script>
   <title>My First Project</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
   <header class="header">
@@ -63,13 +65,16 @@
       <h2>お問い合わせ</h2>
       <form id="contact-form">
         <label>お名前
-          <input type="text" id="name" required>
+          <input type="text" id="name" name="name" required autocomplete="name">
+        </label>
+        <label>メールアドレス（任意）
+          <input type="email" id="email" name="email" autocomplete="email">
         </label>
         <label>メッセージ
-          <textarea id="message" rows="4" required></textarea>
+          <textarea id="message" name="message" rows="4" required></textarea>
         </label>
         <button type="submit">送信</button>
-        <p id="form-result" class="greeting" aria-live="polite"></p>
+        <p id="form-result" class="form-result" aria-live="polite"></p>
       </form>
     </section>
   </main>
@@ -78,6 +83,6 @@
     <p>&copy; 2026 My First Project</p>
   </footer>
 
-  <script src="script.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
