@@ -1,0 +1,28 @@
+name: Reimbursement app checks
+
+on:
+  pull_request:
+    paths:
+      - "reimbursement/**"
+      - ".github/workflows/reimbursement-checks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "reimbursement/**"
+      - ".github/workflows/reimbursement-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript syntax
+        run: node --check reimbursement/app.js
+      - name: Run app smoke checks
+        run: node reimbursement/smoke-test.mjs
