@@ -60,7 +60,7 @@
     }).join(""):'<div class="project-card"><p>まだ案件がありません。右上の「案件を追加」から登録してください。</p></div>';
   }
   function renderImport() {
-    $("import-body").innerHTML=importRows.length?importRows.map((r,i)=>`<tr><td><input type="checkbox" data-import-check="${i}" ${r.selected?"checked":""}></td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.title)}</td><td class="amount">${yen(r.amount)}</td><td><select data-import-project="${i}"><option value="">案件未設定</option>${state.projects.map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===r.projectId?"selected":""}>${escapeHtml(p.name)}</option>`).join("")}</select></td></tr>`).join(""):emptyRow(5,"CSVを取り込むと、ここに履歴候補が表示されます。");
+    $("import-body").innerHTML=importRows.length?importRows.map((r,i)=>`<tr class="${r.contextOnly?"context-row":""}"><td><input type="checkbox" data-import-check="${i}" ${r.selected?"checked":""} ${r.contextOnly?"disabled":""}></td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.title)}<span class="import-source">${escapeHtml(r.source||"")}</span></td><td class="amount">${r.amount?yen(r.amount):"予定参照"}</td><td><select data-import-project="${i}"><option value="">案件未設定</option>${state.projects.map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===r.projectId?"selected":""}>${escapeHtml(p.name)}</option>`).join("")}</select></td></tr>`).join(""):emptyRow(5,"CSVを取り込むと、ここに履歴候補が表示されます。");
     $("register-selected").disabled=!importRows.some(r=>r.selected);
   }
   function renderAll(){fillProjectSelects();renderDashboard();renderExpenses();renderProjects();renderImport();}
@@ -115,7 +115,75 @@
     $("import-message").textContent=importRows.length+"件を読み込みました。案件を割り当てて登録できます。";
     renderImport();
   }
-  function downloadCsv() {
+
+  // Multi-format import: parse locally in the browser, then normalize to expense candidates.
+  async function loadExternalScript(src, test) {
+    if (test()) return;
+    await new Promise((resolve,reject)=>{const s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error("読み取りライブラリを読み込めません。ネット接続を確認してください。"));document.head.appendChild(s);});
+    if(!test())throw new Error("読み取りライブラリの初期化に失敗しました。");
+  }
+  function guessCategory(text) {
+    if(/電車|鉄道|地下鉄|バス|タクシー|icoca|交通|乗車|駅/.test(text.toLowerCase()))return "交通費";
+    if(/ホテル|宿泊|旅館/.test(text))return "宿泊費";
+    if(/カメラ|レンズ|機材|レンタル/.test(text))return "機材費";
+    if(/飲食|レストラン|カフェ|食事|弁当/.test(text))return "食費";
+    if(/文具|消耗品|用紙|電池/.test(text))return "消耗品";
+    return "その他";
+  }
+  function receiptCandidate(text, fileName) {
+    const lines=text.split(/[\r\n]+/).map(x=>x.trim()).filter(Boolean);
+    const dateMatch=text.match(/(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})日?/);
+    const date=dateMatch?normalizeDate(dateMatch[0]):today();
+    const amounts=[...text.matchAll(/(?:合計|総額|お支払額|請求額|税込合計|TOTAL|TOTAL AMOUNT)[^\d]{0,12}(\d[\d,]*)\s*(?:円|JPY)?/gi)].map(m=>Number(m[1].replace(/,/g,"")));
+    const fallback=[...text.matchAll(/(?:¥|￥)\s?(\d[\d,]*)|\b(\d{1,3}(?:,\d{3})+)\s*円/g)].map(m=>Number((m[1]||m[2]).replace(/,/g,"")));
+    const amount=amounts.at(-1)||fallback.at(-1)||0;
+    const merchant=lines.find(x=>x.length>=2&&!/(領収|レシート|receipt|電話|tel|登録番号|〒|http)/i.test(x))||fileName.replace(/\.[^.]+$/,"");
+    return {id:"receipt|"+date+"|"+amount+"|"+merchant+"|"+fileName,date,amount,title:merchant+"（領収書）",category:guessCategory(text),payee:merchant,projectId:"",note:"ファイル: "+fileName+" / OCR読取。登録前に内容を確認してください。",source:"領収書OCR",selected:amount>0,rawText:text.slice(0,1200)};
+  }
+  function parseCalendar(text,fileName) {
+    const unfolded=text.replace(/\r?\n[ \t]/g,""),blocks=unfolded.split("BEGIN:VEVENT").slice(1),items=[];
+    for(const b of blocks){const get=k=>(b.match(new RegExp("(?:^|\\n)"+k+"(?:;[^:]*)?:(.*)"))||[])[1]||"";
+      const raw=get("DTSTART"),d=raw.match(/(\d{4})(\d{2})(\d{2})/);if(!d)continue;
+      const title=get("SUMMARY").replace(/\\,/g,",").replace(/\\n/g," ").trim()||"カレンダー予定";
+      const desc=get("DESCRIPTION").replace(/\\n/g," ").trim(),loc=get("LOCATION").replace(/\\,/g,",").trim();
+      const date=d[1]+"-"+d[2]+"-"+d[3],expenseWords=/撮影|取材|出張|ロケ|打合せ|会議|移動|レンタル|宿泊/i.test(title+" "+desc);
+      if(!expenseWords)continue;
+      const m=(title+" "+desc).match(/(?:¥|￥)?\s?(\d[\d,]*)\s*円/),amount=m?Number(m[1].replace(/,/g,"")):0;
+      items.push({id:"ical|"+date+"|"+title+"|"+loc,date,amount,title:"予定："+title,category:guessCategory(title+" "+desc),payee:loc,projectId:"",note:"iCal予定 / "+fileName+"。予定情報です。経費額は予定から自動確定しません。",source:"iCal予定",selected:false,contextOnly:!amount});
+    }return items;
+  }
+  function genericCsv(text,fileName) {
+    const rows=parseCsv(text);if(rows.length<2)return [];
+    const headers=rows[0].map(x=>x.trim().toLowerCase());
+    const col=keys=>headers.findIndex(h=>keys.some(k=>h.includes(k)));
+    const dc=col(["利用日","取引日","日付","date","年月日"]),ac=col(["金額","利用額","支払額","合計","amount","total"]),tc=col(["内容","利用内容","摘要","商品","店名","加盟店","店舗","description","merchant"]),pc=col(["案件","project"]),pay=col(["支払先","店舗","加盟店","店名","merchant"]);
+    if(dc<0||ac<0)return [];
+    return rows.slice(1).map((r,i)=>{const amt=Number(String(r[ac]||"").replace(/[¥￥,円\s]/g,""));if(!amt)return null;const date=normalizeDate(r[dc]),title=String(r[tc]||r[pay]||fileName).trim(),payee=String(r[pay]||"");
+      const key="filecsv|"+date+"|"+amt+"|"+title;
+      return {id:key,date,amount:Math.abs(amt),title,category:guessCategory(title+" "+payee),payee,projectId:"",note:"取込元: "+fileName,source:"明細CSV",selected:true};
+    }).filter(Boolean);
+  }
+  async function parseImportFile(file) {
+    const name=file.name.toLowerCase(),ext=name.split(".").pop();
+    if(["ics","ical"].includes(ext)){return parseCalendar(await file.text(),file.name);}
+    if(["csv","tsv"].includes(ext)){const text=await file.text();return genericCsv(ext==="tsv"?text.replace(/\t/g,","):text,file.name);}
+    if(["txt","json"].includes(ext)){const text=await file.text();if(ext==="json"){try{const data=JSON.parse(text),arr=Array.isArray(data)?data:(data.transactions||data.items||[]);return arr.map((x,i)=>{const date=normalizeDate(x.date||x.transactionDate),amount=Number(x.amount||x.price||x.total);if(!amount)return null;const title=x.description||x.merchant||x.title||file.name;return {id:"json|"+date+"|"+amount+"|"+title+"|"+i,date,amount:Math.abs(amount),title,category:guessCategory(title),payee:x.merchant||"",projectId:"",note:"JSON取込: "+file.name,source:"JSON明細",selected:true};}).filter(Boolean);}catch{}}
+      const m=text.match(/(?:合計|お支払額|TOTAL)[^\d]{0,10}(\d[\d,]*)/i);return m?[receiptCandidate(text,file.name)]:[];}
+    if(["xlsx","xls"].includes(ext)){await loadExternalScript("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",()=>!!window.XLSX);const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});const text=XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);return genericCsv(text,file.name);}
+    if(ext==="pdf"){await loadExternalScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",()=>!!window.pdfjsLib);pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;let text="";for(let p=1;p<=Math.min(pdf.numPages,12);p++){const page=await pdf.getPage(p),content=await page.getTextContent();text+=content.items.map(x=>x.str).join(" ")+"\n";}if(text.replace(/\s/g,"").length>30)return [receiptCandidate(text,file.name)];await loadExternalScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",()=>!!window.Tesseract);const worker=await Tesseract.createWorker("jpn+eng");try{for(let p=1;p<=Math.min(pdf.numPages,5);p++){const page=await pdf.getPage(p),viewport=page.getViewport({scale:1.6}),canvas=document.createElement("canvas");canvas.width=viewport.width;canvas.height=viewport.height;await page.render({canvasContext:canvas.getContext("2d"),viewport}).promise;const ocr=await worker.recognize(canvas);text+="\n"+ocr.data.text;}return [receiptCandidate(text,file.name)];}finally{await worker.terminate();}}
+    if(["jpg","jpeg","png","webp"].includes(ext)){await loadExternalScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",()=>!!window.Tesseract);const worker=await Tesseract.createWorker("jpn+eng");try{const result=await worker.recognize(file);return [receiptCandidate(result.data.text,file.name)];}finally{await worker.terminate();}}
+    if(ext==="heic")throw new Error(file.name+": HEICはブラウザで画像変換できない場合があります。JPEG/PNGに変換して再度読み込んでください。");
+    throw new Error(file.name+": この形式は未対応です。");
+  }
+  async function importMultipleFiles(files) {
+    const all=[],errors=[];$("import-progress").classList.remove("hidden");
+    for(let i=0;i<files.length;i++){const f=files[i];$("import-progress").textContent="読み取り中 "+(i+1)+"/"+files.length+"： "+f.name;try{all.push(...await parseImportFile(f));}catch(e){errors.push(e.message);}}
+    const seen=new Set(state.importedIds);importRows=all.map(r=>({...r,selected:r.selected&&!seen.has(r.id)}));
+    $("import-progress").classList.add("hidden");renderImport();
+    $("import-message").textContent=all.length+"件の候補を抽出しました。"+(errors.length?"\n読み取りできなかったファイル: "+errors.join(" / "):"")+" iCal予定は経費候補の参考情報として表示します。";
+    showToast(all.length+"件の候補を読み取りました");
+  }
+\n  function downloadCsv() {
     const list=filteredExpenses(),header=["日付","内容","経費区分","案件名","クライアント名","支払先","金額","精算状況","備考"];
     const rows=list.map(e=>[e.date,e.title,e.category,projectName(e.projectId),state.projects.find(p=>p.id===e.projectId)?.client||"",e.payee,e.amount,e.paid?"精算済み":"未精算",e.note]);
     const csv=[header,...rows].map(row=>row.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",")).join("\r\n");
@@ -133,10 +201,10 @@
   ["close-project","cancel-project"].forEach(id=>$(id).addEventListener("click",()=>$("project-dialog").close()));
   $("project-form").addEventListener("submit",e=>{e.preventDefault();state.projects.push({id:uid(),name:$("project-name").value.trim(),client:$("project-client").value.trim(),note:$("project-note").value.trim(),createdAt:new Date().toISOString()});$("project-dialog").close();saveState();showToast("案件を登録しました");});
   $("projects-grid").addEventListener("click",e=>{const b=e.target.closest("[data-project-expenses]");if(b){switchView("expenses");$("filter-project").value=b.dataset.projectExpenses;renderExpenses();}});
-  $("icoca-file").addEventListener("change",async e=>{const file=e.target.files[0];if(!file)return;try{importCsv(await file.text());showToast("履歴を読み込みました");}catch(err){$("import-message").textContent=err.message;showToast("CSVを読み込めませんでした");}});
+  $("expense-files").addEventListener("change",async e=>{const files=[...e.target.files];if(files.length)await importMultipleFiles(files);e.target.value="";});
   $("import-body").addEventListener("change",e=>{const c=e.target.closest("[data-import-check]"),p=e.target.closest("[data-import-project]");if(c)importRows[Number(c.dataset.importCheck)].selected=c.checked;if(p)importRows[Number(p.dataset.importProject)].projectId=p.value;renderImport();});
   $("select-all-import").addEventListener("change",e=>{importRows.forEach(r=>r.selected=e.target.checked);renderImport();});
-  $("register-selected").addEventListener("click",()=>{const selected=importRows.filter(r=>r.selected);selected.forEach(r=>{state.expenses.push({id:uid(),date:r.date,amount:r.amount,title:r.title,category:r.category,projectId:r.projectId,payee:r.payee,note:"ICOCA CSVから取込",paid:false,createdAt:new Date().toISOString()});state.importedIds.push(r.id);});importRows=importRows.filter(r=>!r.selected);saveState();showToast(selected.length+"件を明細に登録しました");});
+  $("register-selected").addEventListener("click",()=>{const selected=importRows.filter(r=>r.selected&&!r.contextOnly&&r.amount>0);selected.forEach(r=>{state.expenses.push({id:uid(),date:r.date,amount:r.amount,title:r.title,category:r.category,projectId:r.projectId,payee:r.payee,note:r.note||("データ取込: "+(r.source||"")),paid:false,createdAt:new Date().toISOString()});state.importedIds.push(r.id);});importRows=importRows.filter(r=>!r.selected||r.contextOnly);saveState();showToast(selected.length+"件を明細に登録しました");});
   $("today-label").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric",weekday:"long"});
   renderAll();
 })();

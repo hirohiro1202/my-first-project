@@ -14,7 +14,7 @@
       <button class="nav-item active" data-view="dashboard"><span>▦</span> ダッシュボード</button>
       <button class="nav-item" data-view="expenses"><span>≡</span> 明細一覧</button>
       <button class="nav-item" data-view="projects"><span>▣</span> 案件管理</button>
-      <button class="nav-item" data-view="import"><span>⇧</span> ICOCA履歴取込</button>
+      <button class="nav-item" data-view="import"><span>⇧</span> データ取込</button>
     </nav>
     <div class="sidebar-bottom"><span class="status-dot"></span> ローカル保存モード<small>この端末のブラウザ内に保存</small></div>
   </aside>
@@ -40,9 +40,9 @@
       <div class="toolbar"><p class="muted">案件を登録すると、明細入力時に選択できます。</p><button class="button primary" id="add-project">＋ 案件を追加</button></div><div id="projects-grid" class="projects-grid"></div>
     </section>
     <section id="view-import" class="view hidden">
-      <div class="import-card"><div class="import-icon">⇧</div><h2>ICOCAの利用履歴を取り込む</h2><p>ICOCAアプリや利用履歴から書き出したCSVを選択すると、明細候補として読み込みます。ファイル形式によって列の調整が必要な場合があります。</p><label class="file-picker">CSVファイルを選択<input type="file" id="icoca-file" accept=".csv,text/csv"></label><p class="muted" id="import-message">取り込んだ履歴は、案件を選んで立替明細に登録できます。</p></div>
+      <div class="import-card"><div class="import-icon">⇧</div><h2>経費データをまとめて取り込む</h2><p>ICOCA履歴、領収書、レシート、カード明細、iCal予定を読み込みます。画像やPDFはブラウザ上で文字を読み取り、登録前に候補を確認できます。</p><label class="file-picker">ファイルを選択（複数可）<input type="file" id="expense-files" multiple accept=".csv,.tsv,.txt,.json,.ics,.ical,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.webp,.heic"></label><p class="import-formats">CSV・TSV・Excel・PDF・画像・iCal・テキスト</p><div id="import-progress" class="import-progress hidden"></div><p class="muted" id="import-message">ファイルはこのブラウザ内で処理します。AIサーバーへ領収書を送信しません。</p></div>
       <div class="section-head"><div><h2>取込候補</h2><p>未登録の履歴</p></div><button class="button" id="register-selected" disabled>選択分を明細に登録</button></div>
-      <div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="select-all-import" aria-label="すべて選択"></th><th>利用日</th><th>利用区間・内容</th><th>金額</th><th>案件</th></tr></thead><tbody id="import-body"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="select-all-import" aria-label="すべて選択"></th><th>利用日</th><th>内容・読み取り元</th><th>金額</th><th>案件</th></tr></thead><tbody id="import-body"></tbody></table></div>
     </section>
   </main>
   <dialog id="expense-dialog"><form id="expense-form" method="dialog"><div class="dialog-head"><div><p class="eyebrow">EXPENSE ENTRY</p><h2 id="expense-dialog-title">明細を追加</h2></div><button type="button" class="icon-button" id="close-expense" aria-label="閉じる">×</button></div><input type="hidden" id="expense-id"><div class="form-grid">
