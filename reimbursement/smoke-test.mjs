@@ -8,7 +8,7 @@ const js = readFileSync(new URL("app.js", base), "utf8");
 for (const asset of ["app.css", "app.js"]) {
   assert.ok(existsSync(new URL(asset, base)), `Missing required asset: ${asset}`);
 }
-const ids = new Set([...html.matchAll(/\\bid="([^"]+)"/g)].map(m => m[1]));
+const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]));
 for (const id of ["recent-body","expenses-body","projects-grid","import-body","expense-form","project-form","toast","filter-month","export-csv"]) {
   assert.ok(ids.has(id), `Required interface element not found: #${id}`);
 }
