@@ -12,7 +12,7 @@ const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]));
 for (const id of ["recent-body","expenses-body","projects-grid","import-body","expense-form","project-form","toast","filter-month","export-csv"]) {
   assert.ok(ids.has(id), `Required interface element not found: #${id}`);
 }
-for (const feature of ["renderDashboard","renderExpenses","renderProjects","importCsv","downloadCsv","localStorage"]) {
+for (const feature of ["renderDashboard","renderExpenses","renderProjects","importCsv","importMultipleFiles","parseCalendar","receiptCandidate","downloadCsv","localStorage"]) {
   assert.ok(js.includes(feature), `Expected app feature is missing: ${feature}`);
 }
 console.log("Reimbursement app smoke checks passed.");
